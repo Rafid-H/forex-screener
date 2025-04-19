@@ -158,12 +158,14 @@
     </div>
     <script>
         // Configurable API
-        const API_CONFIG = {
-            provider: 'AlphaVantage',
-            key: 'YOUR_API_KEY', // Replace with Alpha Vantage key
-            baseUrl: 'https://www.alphavantage.co/query'
-            // Add broker API here later, e.g., { provider: 'Broker', url: 'https://broker.api', key: 'BROKER_KEY' }
-        };
+const API_CONFIG = {
+    provider: 'APILayer',
+    key: '0918420f10e2c92022800c970cd3d42d',
+    baseUrl: 'http://apilayer.net/api/live',
+    currencies: 'EUR,GBP,CAD,PLN',
+    source: 'USD',
+    format: 1
+};
 
         // Initialize EmailJS
         emailjs.init("YOUR_EMAILJS_USER_ID"); // Replace with EmailJS User ID
@@ -181,20 +183,52 @@
         let screenerConditions = [];
         let alertStates = {};
 
-        // Fetch price data
-        async function fetchPriceData(pair, timeframe) {
-            const interval = timeframe === 'M1' ? '1min' : timeframe === 'M5' ? '5min' : timeframe === 'M15' ? '15min' : timeframe === 'H1' ? '60min' : timeframe === 'H4' ? '60min' : 'daily';
-            const response = await fetch(`${API_CONFIG.baseUrl}?function=FX_INTRADAY&from_symbol=${pair.slice(0,3)}&to_symbol=${pair.slice(3)}&interval=${interval}&apikey=${API_CONFIG.key}`);
-            const data = await response.json();
-            const timeSeries = data[`Time Series FX (${interval})`] || {};
-            return Object.entries(timeSeries).map(([time, values]) => ({
-                time: new Date(time).getTime() / 1000,
-                open: parseFloat(values['1. open']),
-                high: parseFloat(values['2. high']),
-                low: parseFloat(values['3. low']),
-                close: parseFloat(values['4. close'])
-            })).slice(0, 50);
-        }
+       // Fetch price data
+async function fetchPriceData(pair, timeframe) {
+    try {
+        // Construct the APILayer API URL with query parameters
+        const url = `${API_CONFIG.baseUrl}?access_key=${API_CONFIG.key}&currencies=${API_CONFIG.currencies}&source=${API_CONFIG.source}&format=${API_CONFIG.format}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error?.info || 'Failed to fetch data from APILayer');
+
+        // Map the pair (e.g., EURUSD) to APILayer format (e.g., USDEUR)
+        const fromCurrency = pair.slice(0, 3); // e.g., EUR
+        const toCurrency = pair.slice(3); // e.g., USD
+        const apiPair = `${API_CONFIG.source}${fromCurrency}`; // e.g., USDEUR
+
+        // Get the current rate from APILayer (e.g., data.quotes.USDEUR)
+        const rate = data.quotes[apiPair];
+        if (!rate) throw new Error(`Pair ${pair} not supported by APILayer`);
+
+        // Since APILayer provides real-time rates (not candlestick data), simulate candlestick data
+        const currentTime = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+        const simulatedCandle = {
+            time: currentTime,
+            open: rate,  // Use the current rate for all fields as a simplification
+            high: rate,
+            low: rate,
+            close: rate
+        };
+
+        // Return an array with a single simulated candlestick
+        return [simulatedCandle];
+    } catch (e) {
+        console.error(`Error fetching ${pair} ${timeframe}:`, e);
+        return [];
+    }
+}
+
+        // Since APILayer provides real-time rates (not candlestick data), simulate candlestick data
+        const currentTime = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+        const simulatedCandle = {
+            time: currentTime,
+            open: rate,  // Use the current rate for all fields as a simplification
+            high: rate,
+            low: rate,
+            close: rate
+        };
 
         // Update watchlist
         async function updateWatchlist() {
