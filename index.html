@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Screener</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #131722;
+            color: #ffffff;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #toolbar {
+            background-color: #1e222d;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+        }
+        #toolbar select, #toolbar button {
+            background-color: #2a2e39;
+            color: #ffffff;
+            border: 1px solid #3c444d;
+            padding: 5px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        #main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        #chart-container {
+            width: 70%;
+            padding: 20px;
+        }
+        #watchlist {
+            width: 15%;
+            background-color: #1e222d;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        #alert-sidebar {
+            width: 15%;
+            background-color: #1e222d;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .watchlist-item {
+            padding: 5px;
+            border-bottom: 1px solid #3c444d;
+        }
+        .alert {
+            background-color: #2a2e39;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        #chart {
+            width: 100%;
+            height: 500px;
+        }
+        #indicator-settings, #screener-settings, #alert-settings {
+            display: none;
+            position: absolute;
+            background-color: #2a2e39;
+            border: 1px solid #3c444d;
+            padding: 15px;
+            z-index: 10;
+        }
+        #screener-conditions div {
+            margin-bottom: 10px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3.2.0/dist/email.min.js"></script>
+</head>
+<body>
+    <div id="toolbar">
+        <select id="timeframe">
+            <option value="M1">1m</option>
+            <option value="M5">5m</option>
+            <option value="M15">15m</option>
+            <option value="H1">1h</option>
+            <option value="H4">4h</option>
+            <option value="D1">1d</option>
+        </select>
+        <select id="pair">
+            <option value="EURUSD">EURUSD</option>
+            <option value="USDJPY">USDJPY</option>
+            <option value="GBPUSD">GBPUSD</option>
+            <option value="AUDUSD">AUDUSD</option>
+            <option value="USDCAD">USDCAD</option>
+            <option value="USDCHF">USDCHF</option>
+            <option value="NZDUSD">NZDUSD</option>
+            <option value="XAUUSD">XAUUSD</option>
+            <option value="BTCUSD">BTCUSD</option>
+            <option value="DXY">DXY</option>
+        </select>
+        <button onclick="showIndicatorSettings()">Indicators</button>
+        <button onclick="toggleTrendlineMode()">Draw Trendline</button>
+        <button onclick="showScreenerSettings()">Screener</button>
+        <button onclick="showAlertSettings()">Alert Settings</button>
+    </div>
+    <div id="main-content">
+        <div id="chart-container">
+            <div id="chart"></div>
+        </div>
+        <div id="watchlist">
+            <h3>Watchlist</h3>
+            <div class="watchlist-item">EURUSD: <span id="eurusd-price">Loading...</span></div>
+            <div class="watchlist-item">USDJPY: <span id="usdjpy-price">Loading...</span></div>
+            <div class="watchlist-item">GBPUSD: <span id="gbpusd-price">Loading...</span></div>
+            <div class="watchlist-item">AUDUSD: <span id="audusd-price">Loading...</span></div>
+            <div class="watchlist-item">USDCAD: <span id="usdcad-price">Loading...</span></div>
+            <div class="watchlist-item">USDCHF: <span id="usdchf-price">Loading...</span></div>
+            <div class="watchlist-item">NZDUSD: <span id="nzdusd-price">Loading...</span></div>
+            <div class="watchlist-item">XAUUSD: <span id="xauusd-price">Loading...</span></div>
+            <div class="watchlist-item">BTCUSD: <span id="btcusd-price">Loading...</span></div>
+            <div class="watchlist-item">DXY: <span id="dxy-price">Loading...</span></div>
+        </div>
+        <div id="alert-sidebar">
+            <h3>Alerts</h3>
+            <div id="alerts"></div>
+        </div>
+    </div>
+    <div id="indicator-settings">
+        <h4>Add Indicator</h4>
+        <select id="indicator-type">
+            <option value="EMA">EMA</option>
+            <option value="RSI">RSI</option>
+            <option value="MACD">MACD</option>
+            <option value="BB">Bollinger Bands</option>
+        </select>
+        <div id="indicator-params"></div>
+        <button onclick="addIndicator()">Add</button>
+        <button onclick="closeIndicatorSettings()">Close</button>
+    </div>
+    <div id="screener-settings">
+        <h4>Screener Conditions</h4>
+        <div id="screener-conditions"></div>
+        <button onclick="addCondition()">Add Condition</button>
+        <button onclick="saveScreener()">Save</button>
+        <button onclick="closeScreenerSettings()">Close</button>
+    </div>
+    <div id="alert-settings">
+        <h4>Alert Settings</h4>
+        <label><input type="checkbox" id="alert-popup" checked> Browser Pop-up</label><br>
+        <label><input type="checkbox" id="alert-email" checked> Email</label><br>
+        <label><input type="checkbox" id="alert-telegram" checked> Telegram</label><br>
+        <label>Telegram Chat ID: <input type="text" id="telegram-chat-id" value="YOUR_CHAT_ID"></label><br>
+        <label><input type="checkbox" id="alert-sidebar" checked> Sidebar</label><br>
+        <button onclick="saveAlertSettings()">Save</button>
+        <button onclick="closeAlertSettings()">Close</button>
+    </div>
+    <script>
+        // Configurable API
+        const API_CONFIG = {
+            provider: 'AlphaVantage',
+            key: 'YOUR_API_KEY', // Replace with Alpha Vantage key
+            baseUrl: 'https://www.alphavantage.co/query'
+            // Add broker API here later, e.g., { provider: 'Broker', url: 'https://broker.api', key: 'BROKER_KEY' }
+        };
+
+        // Initialize EmailJS
+        emailjs.init("YOUR_EMAILJS_USER_ID"); // Replace with EmailJS User ID
+
+        // Chart setup
+        const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+            width: document.getElementById('chart-container').offsetWidth,
+            height: 500,
+            timeScale: { timeVisible: true, secondsVisible: false },
+        });
+        const candleSeries = chart.addCandlestickSeries();
+        let trendlineMode = false;
+        let trendlines = JSON.parse(localStorage.getItem('trendlines') || '{}');
+        let indicators = [];
+        let screenerConditions = [];
+        let alertStates = {};
+
+        // Fetch price data
+        async function fetchPriceData(pair, timeframe) {
+            const interval = timeframe === 'M1' ? '1min' : timeframe === 'M5' ? '5min' : timeframe === 'M15' ? '15min' : timeframe === 'H1' ? '60min' : timeframe === 'H4' ? '60min' : 'daily';
+            const response = await fetch(`${API_CONFIG.baseUrl}?function=FX_INTRADAY&from_symbol=${pair.slice(0,3)}&to_symbol=${pair.slice(3)}&interval=${interval}&apikey=${API_CONFIG.key}`);
+            const data = await response.json();
+            const timeSeries = data[`Time Series FX (${interval})`] || {};
+            return Object.entries(timeSeries).map(([time, values]) => ({
+                time: new Date(time).getTime() / 1000,
+                open: parseFloat(values['1. open']),
+                high: parseFloat(values['2. high']),
+                low: parseFloat(values['3. low']),
+                close: parseFloat(values['4. close'])
+            })).slice(0, 50);
+        }
+
+        // Update watchlist
+        async function updateWatchlist() {
+            const pairs = ['EURUSD', 'USDJPY', 'GBPUSD', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'XAUUSD', 'BTCUSD', 'DXY'];
+            for (const pair of pairs) {
+                try {
+                    const data = await fetchPriceData(pair, 'M5');
+                    document.getElementById(`${pair.toLowerCase()}-price`).textContent = data[0]?.close.toFixed(5) || 'N/A';
+                } catch (e) {
+                    console.error(`Error fetching ${pair}:`, e);
+                }
+            }
+        }
+
+        // Indicator calculations
+        function calculateEMA(data, period, applyTo = 'close') {
+            const k = 2 / (period + 1);
+            let ema = data[0][applyTo];
+            const result = [{ time: data[0].time, value: ema }];
+            for (let i = 1; i < data.length; i++) {
+                ema = data[i][applyTo] * k + ema * (1 - k);
+                result.push({ time: data[i].time, value: ema });
+            }
+            return result;
+        }
+
+        function calculateRSI(data, period = 14) {
+            let gains = 0, losses = 0;
+            for (let i = 1; i < data.length; i++) {
+                const change = data[i].close - data[i-1].close;
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+            const avgGain = gains / period;
+            const avgLoss = losses / period;
+            const rs = avgGain / (avgLoss || 1);
+            return 100 - (100 / (1 + rs));
+        }
+
+        function calculateMACD(data, fast = 12, slow = 26, signal = 9) {
+            const ema = (data, period) => {
+                const k = 2 / (period + 1);
+                let ema = data[0].close;
+                for (let i = 1; i < data.length; i++) {
+                    ema = data[i].close * k + ema * (1 - k);
+                }
+                return ema;
+            };
+            const fastEMA = ema(data, fast);
+            const slowEMA = ema(data, slow);
+            const macd = fastEMA - slowEMA;
+            return { macd, signal: ema(data.slice(-signal), signal) };
+        }
+
+        function calculateBB(data, period = 20, multiplier = 2) {
+            const sma = data.slice(-period).reduce((sum, c) => sum + c.close, 0) / period;
+            const stdDev = Math.sqrt(data.slice(-period).reduce((sum, c) => sum + Math.pow(c.close - sma, 2), 0) / period);
+            return { middle: sma, upper: sma + multiplier * stdDev, lower: sma - multiplier * stdDev };
+        }
+
+        function isDoji(candle) {
+            const body = Math.abs(candle.close - candle.open);
+            const range = candle.high - candle.low;
+            return body <= range * 0.1;
+        }
+
+        function isEngulfing(prev, curr) {
+            const isBullish = curr.close > curr.open && prev.close < prev.open && curr.open <= prev.close && curr.close >= prev.open;
+            const isBearish = curr.close < curr.open && prev.close > prev.open && curr.open >= prev.close && curr.close <= prev.open;
+            return { bullish: isBullish, bearish: isBearish };
+        }
+
+        // Trendline handling
+        function toggleTrendlineMode() {
+            trendlineMode = !trendlineMode;
+            document.getElementById('chart').style.cursor = trendlineMode ? 'crosshair' : 'default';
+        }
+
+        let startPoint = null;
+        document.getElementById('chart').onclick = (e) => {
+            if (!trendlineMode) return;
+            const price = chart.priceScale().pixelToPrice(e.offsetY);
+            const time = chart.timeScale().pixelToTime(e.offsetX);
+            const pair = document.getElementById('pair').value;
+            if (!trendlines[pair]) trendlines[pair] = [];
+            if (!startPoint) {
+                startPoint = { price, time };
+            } else {
+                trendlines[pair].push({ start: startPoint, end: { price, time }, alerts: [] });
+                localStorage.setItem('trendlines', JSON.stringify(trendlines));
+                startPoint = null;
+                drawTrendlines();
+            }
+        };
+
+        document.getElementById('chart').oncontextmenu = (e) => {
+            e.preventDefault();
+            const pair = document.getElementById('pair').value;
+            const time = chart.timeScale().pixelToTime(e.offsetX);
+            const price = chart.priceScale().pixelToPrice(e.offsetY);
+            const closestTrendline = trendlines[pair]?.reduce((closest, tl, idx) => {
+                const slope = (tl.end.price - tl.start.price) / (tl.end.time - tl.start.time);
+                const tlPrice = tl.start.price + slope * (time - tl.start.time);
+                const dist = Math.abs(tlPrice - price);
+                return dist < (closest.dist || Infinity) ? { idx, dist } : closest;
+            }, {});
+            if (closestTrendline && closestTrendline.dist < 10) {
+                trendlines[pair][closestTrendline.idx].alerts.push('cross');
+                localStorage.setItem('trendlines', JSON.stringify(trendlines));
+                alert('Trendline alert added: Price Cross');
+            }
+        };
+
+        function drawTrendlines() {
+            console.log('Trendlines:', trendlines); // Placeholder (Lightweight Charts lacks native trendline support)
+        }
+
+        // Indicator settings
+        function showIndicatorSettings() {
+            const settings = document.getElementById('indicator-settings');
+            settings.style.display = 'block';
+            updateIndicatorParams();
+        }
+
+        function updateIndicatorParams() {
+            const type = document.getElementById('indicator-type').value;
+            const paramsDiv = document.getElementById('indicator-params');
+            paramsDiv.innerHTML = '';
+            if (type === 'EMA') {
+                paramsDiv.innerHTML = `
+                    <label>Period: <input type="number" id="ema-period" value="20"></label><br>
+                    <label>Apply to: <select id="ema-apply">
+                        <option value="close">Close</option>
+                        <option value="open">Open</option>
+                        <option value="high">High</option>
+                        <option value="low">Low</option>
+                    </select></label>
+                `;
+            } else if (type === 'RSI') {
+                paramsDiv.innerHTML = `<label>Period: <input type="number" id="rsi-period" value="14"></label>`;
+            } else if (type === 'MACD') {
+                paramsDiv.innerHTML = `
+                    <label>Fast: <input type="number" id="macd-fast" value="12"></label><br>
+                    <label>Slow: <input type="number" id="macd-slow" value="26"></label><br>
+                    <label>Signal: <input type="number" id="macd-signal" value="9"></label>
+                `;
+            } else if (type === 'BB') {
+                paramsDiv.innerHTML = `
+                    <label>Period: <input type="number" id="bb-period" value="20"></label><br>
+                    <label>Multiplier: <input type="number" id="bb-multiplier" value="2" step="0.1"></label>
+                `;
+            }
+        }
+
+        function addIndicator() {
+            const type = document.getElementById('indicator-type').value;
+            let params = {};
+            if (type === 'EMA') {
+                params.period = parseInt(document.getElementById('ema-period').value);
+                params.applyTo = document.getElementById('ema-apply').value;
+            } else if (type === 'RSI') {
+                params.period = parseInt(document.getElementById('rsi-period').value);
+            } else if (type === 'MACD') {
+                params.fast = parseInt(document.getElementById('macd-fast').value);
+                params.slow = parseInt(document.getElementById('macd-slow').value);
+                params.signal = parseInt(document.getElementById('macd-signal').value);
+            } else if (type === 'BB') {
+                params.period = parseInt(document.getElementById('bb-period').value);
+                params.multiplier = parseFloat(document.getElementById('bb-multiplier').value);
+            }
+            indicators.push({ type, params });
+            closeIndicatorSettings();
+            updateChart();
+        }
+
+        function closeIndicatorSettings() {
+            document.getElementById('indicator-settings').style.display = 'none';
+        }
+
+        // Screener settings
+        function showScreenerSettings() {
+            document.getElementById('screener-settings').style.display = 'block';
+            renderScreenerConditions();
+        }
+
+        function addCondition() {
+            screenerConditions.push({
+                type: 'indicator',
+                indicator: 'EMA',
+                condition: 'cross_above',
+                params: { period: 20, applyTo: 'close' }
+            });
+            renderScreenerConditions();
+        }
+
+        function renderScreenerConditions() {
+            const conditionsDiv = document.getElementById('screener-conditions');
+            conditionsDiv.innerHTML = '';
+            screenerConditions.forEach((cond, idx) => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <select onchange="updateCondition(${idx}, this.value, 'type')">
+                        <option value="indicator" ${cond.type === 'indicator' ? 'selected' : ''}>Indicator</option>
+                        <option value="pattern" ${cond.type === 'pattern' ? 'selected' : ''}>Pattern</option>
+                    </select>
+                    ${cond.type === 'indicator' ? `
+                        <select onchange="updateCondition(${idx}, this.value, 'indicator')">
+                            <option value="EMA" ${cond.indicator === 'EMA' ? 'selected' : ''}>EMA</option>
+                            <option value="RSI" ${cond.indicator === 'RSI' ? 'selected' : ''}>RSI</option>
+                            <option value="MACD" ${cond.indicator === 'MACD' ? 'selected' : ''}>MACD</option>
+                            <option value="BB" ${cond.indicator === 'BB' ? 'selected' : ''}>Bollinger Bands</option>
+                        </select>
+                        <select onchange="updateCondition(${idx}, this.value, 'condition')">
+                            <option value="cross_above" ${cond.condition === 'cross_above' ? 'selected' : ''}>Cross Above</option>
+                            <option value="cross_below" ${cond.condition === 'cross_below' ? 'selected' : ''}>Cross Below</option>
+                            <option value="above" ${cond.condition === 'above' ? 'selected' : ''}>Above</option>
+                            <option value="below" ${cond.condition === 'below' ? 'selected' : ''}>Below</option>
+                        </select>
+                        <input type="number" value="${cond.params.period || 20}" onchange="updateCondition(${idx}, this.value, 'params.period')">
+                    ` : `
+                        <select onchange="updateCondition(${idx}, this.value, 'indicator')">
+                            <option value="Doji" ${cond.indicator === 'Doji' ? 'selected' : ''}>Doji</option>
+                            <option value="BullishEngulfing" ${cond.indicator === 'BullishEngulfing' ? 'selected' : ''}>Bullish Engulfing</option>
+                            <option value="BearishEngulfing" ${cond.indicator === 'BearishEngulfing' ? 'selected' : ''}>Bearish Engulfing</option>
+                        </select>
+                    `}
+                    <button onclick="removeCondition(${idx})">Remove</button>
+                `;
+                conditionsDiv.appendChild(div);
+            });
+        }
+
+        function updateCondition(idx, value, field) {
+            if (field.startsWith('params.')) {
+                const key = field.split('.')[1];
+                screenerConditions[idx].params[key] = parseFloat(value);
+            } else {
+                screenerConditions[idx][field] = value;
+            }
+            renderScreenerConditions();
+        }
+
+        function removeCondition(idx) {
+            screenerConditions.splice(idx, 1);
+            renderScreenerConditions();
+        }
+
+        function saveScreener() {
+            closeScreenerSettings();
+            updateChart();
+        }
+
+        function closeScreenerSettings() {
+            document.getElementById('screener-settings').style.display = 'none';
+        }
+
+        // Alert settings
+        function showAlertSettings() {
+            document.getElementById('alert-settings').style.display = 'block';
+        }
+
+        function saveAlertSettings() {
+            localStorage.setItem('telegramChatId', document.getElementById('telegram-chat-id').value);
+            closeAlertSettings();
+        }
+
+        function closeAlertSettings() {
+            document.getElementById('alert-settings').style.display = 'none';
+        }
+
+        // Check conditions
+        async function checkConditions(data, pair, timeframe) {
+            const lastCandle = data[0];
+            const prevCandle = data[1];
+            let conditionsMet = screenerConditions.length === 0 ? false : true;
+
+            for (const cond of screenerConditions) {
+                let met = false;
+                if (cond.type === 'indicator') {
+                    if (cond.indicator === 'EMA') {
+                        const ema = calculateEMA(data, cond.params.period, cond.params.applyTo)[0].value;
+                        if (cond.condition === 'cross_above' && lastCandle.close > ema && prevCandle.close <= ema) met = true;
+                        if (cond.condition === 'cross_below' && lastCandle.close < ema && prevCandle.close >= ema) met = true;
+                        if (cond.condition === 'above' && lastCandle.close > ema) met = true;
+                        if (cond.condition === 'below' && lastCandle.close < ema) met = true;
+                    } else if (cond.indicator === 'RSI') {
+                        const rsi = calculateRSI(data, cond.params.period);
+                        if (cond.condition === 'above' && rsi > 70) met = true;
+                        if (cond.condition === 'below' && rsi < 30) met = true;
+                    } else if (cond.indicator === 'MACD') {
+                        const macd = calculateMACD(data, cond.params.fast || 12, cond.params.slow || 26, cond.params.signal || 9);
+                        if (cond.condition === 'cross_above' && macd.macd > macd.signal) met = true;
+                        if (cond.condition === 'cross_below' && macd.macd < macd.signal) met = true;
+                    } else if (cond.indicator === 'BB') {
+                        const bb = calculateBB(data, cond.params.period, cond.params.multiplier);
+                        if (cond.condition === 'above' && lastCandle.close > bb.upper) met = true;
+                        if (cond.condition === 'below' && lastCandle.close < bb.lower) met = true;
+                    }
+                } else if (cond.type === 'pattern') {
+                    if (cond.indicator === 'Doji' && isDoji(lastCandle)) met = true;
+                    if (cond.indicator === 'BullishEngulfing' && isEngulfing(prevCandle, lastCandle).bullish) met = true;
+                    if (cond.indicator === 'BearishEngulfing' && isEngulfing(prevCandle, lastCandle).bearish) met = true;
+                }
+                conditionsMet = conditionsMet && met;
+            }
+
+            // Trendline alerts
+            if (trendlines[pair]) {
+                trendlines[pair].forEach((tl, idx) => {
+                    if (tl.alerts.includes('cross')) {
+                        const slope = (tl.end.price - tl.start.price) / (tl.end.time - tl.start.time);
+                        const priceAtTime = tl.start.price + slope * (lastCandle.time - tl.start.time);
+                        if (lastCandle.close > priceAtTime && prevCandle.close <= priceAtTime && !alertStates[`${pair}_${timeframe}_trendline_cross_up_${idx}`]) {
+                            triggerAlert(`Trendline Cross Up, ${pair}, ${timeframe}`);
+                            alertStates[`${pair}_${timeframe}_trendline_cross_up_${idx}`] = true;
+                        } else if (lastCandle.close < priceAtTime && prevCandle.close >= priceAtTime && !alertStates[`${pair}_${timeframe}_trendline_cross_down_${idx}`]) {
+                            triggerAlert(`Trendline Cross Down, ${pair}, ${timeframe}`);
+                            alertStates[`${pair}_${timeframe}_trendline_cross_down_${idx}`] = true;
+                        }
+                    }
+                });
+            }
+
+            if (conditionsMet && !alertStates[`${pair}_${timeframe}_screener`]) {
+                triggerAlert(`Screener Conditions Met, ${pair}, ${timeframe}`);
+                alertStates[`${pair}_${timeframe}_screener`] = true;
+            }
+        }
+
+        // Trigger alerts
+        async function triggerAlert(message) {
+            const settings = {
+                popup: document.getElementById('alert-popup').checked,
+                email: document.getElementById('alert-email').checked,
+                telegram: document.getElementById('alert-telegram').checked,
+                sidebar: document.getElementById('alert-sidebar').checked
+            };
+
+            if (settings.popup) alert(message);
+
+            if (settings.sidebar) {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert';
+                alertDiv.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                document.getElementById('alerts').prepend(alertDiv);
+            }
+
+            if (settings.email) {
+                emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
+                    message: message,
+                    to_email: "your_email@example.com"
+                }).then(() => console.log('Email sent'));
+            }
+
+            if (settings.telegram) {
+                const telegramToken = 'YOUR_TELEGRAM_TOKEN';
+                const chatId = localStorage.getItem('telegramChatId') || document.getElementById('telegram-chat-id').value;
+                await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`);
+            }
+        }
+
+        // Update chart
+        async function updateChart() {
+            const pair = document.getElementById('pair').value;
+            const timeframe = document.getElementById('timeframe').value;
+            try {
+                const data = await fetchPriceData(pair, timeframe);
+                candleSeries.setData(data);
+                checkConditions(data, pair, timeframe);
+                updateWatchlist();
+            } catch (e) {
+                console.error(`Error updating chart for ${pair}:`, e);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('timeframe').onchange = updateChart;
+        document.getElementById('pair').onchange = updateChart;
+        document.getElementById('indicator-type').onchange = updateIndicatorParams;
+
+        // Initial update
+        updateChart();
+        setInterval(updateChart, 60000);
+    </script>
+</body>
+</html>
